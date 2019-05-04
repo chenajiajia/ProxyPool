@@ -2,6 +2,10 @@ import asyncio
 import aiohttp
 import time
 import sys
+import re
+
+import requests
+
 try:
     from aiohttp import ClientError
 except:
@@ -27,17 +31,42 @@ class Tester(object):
                     proxy = proxy.decode('utf-8')
                 real_proxy = 'http://' + proxy
                 print('正在测试', proxy)
-                async with session.get(TEST_URL, proxy=real_proxy, timeout=15, allow_redirects=False) as response:
+                async with session.get(TEST_URL, proxy=real_proxy, timeout=15, allow_redirects=ALLOW_REDIRECTS, headers=DEFAULT_HEADERS) as response:
                     if response.status in VALID_STATUS_CODES:
-                        self.redis.max(proxy)
                         print('代理可用', proxy)
+                        self.redis.max(proxy)
                     else:
-                        self.redis.decrease(proxy)
                         print('请求响应码不合法 ', response.status, 'IP', proxy)
+                        self.redis.decrease(proxy)
             except (ClientError, aiohttp.client_exceptions.ClientConnectorError, asyncio.TimeoutError, AttributeError):
                 self.redis.decrease(proxy)
                 print('代理请求失败', proxy)
-    
+
+    async def test_pddsearch_proxy(self, proxy):
+        """
+        测试拼多多搜索代理
+        :param proxy:
+        :return:
+        """
+        conn = aiohttp.TCPConnector(verify_ssl=False)
+        async with aiohttp.ClientSession(connector=conn) as session:
+            try:
+                if isinstance(proxy, bytes):
+                    proxy = proxy.decode('utf-8')
+                real_proxy = 'http://' + proxy
+                async with session.get(TEST_URL, proxy=real_proxy, timeout=15, allow_redirects=ALLOW_REDIRECTS, headers=DEFAULT_HEADERS) as response:
+                    result = await response.text()
+                    list_id = re.findall('"list_id.*?".*?"(.*?)"', result, re.S)
+                    if response.status in VALID_STATUS_CODES and list_id:
+                        print('代理可用', proxy)
+                        self.redis.max(proxy)
+                    else:
+                        print('请求响应码不合法 ', response.status, 'IP', proxy)
+                        self.redis.decrease(proxy)
+            except (ClientError, aiohttp.client_exceptions.ClientConnectorError, asyncio.TimeoutError, AttributeError):
+                self.redis.decrease(proxy)
+                print('代理请求失败', proxy)
+
     def run(self):
         """
         测试主函数
@@ -53,7 +82,8 @@ class Tester(object):
                 print('正在测试第', start + 1, '-', stop, '个代理')
                 test_proxies = self.redis.batch(start, stop)
                 loop = asyncio.get_event_loop()
-                tasks = [self.test_single_proxy(proxy) for proxy in test_proxies]
+                a = 'self.{method}'.format(method=TEST_METHOD)
+                tasks = [self.test_pddsearch_proxy(proxy) for proxy in test_proxies]
                 loop.run_until_complete(asyncio.wait(tasks))
                 sys.stdout.flush()
                 time.sleep(5)

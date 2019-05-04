@@ -27,7 +27,8 @@ class RedisClient(object):
             print('代理不符合规范', proxy, '丢弃')
             return
         if not self.db.zscore(REDIS_KEY, proxy):
-            return self.db.zadd(REDIS_KEY, score, proxy)
+            print(proxy, score)
+            return self.db.zadd(REDIS_KEY, {proxy: score})
     
     def random(self):
         """
@@ -73,7 +74,7 @@ class RedisClient(object):
         :return: 设置结果
         """
         print('代理', proxy, '可用，设置为', MAX_SCORE)
-        return self.db.zadd(REDIS_KEY, MAX_SCORE, proxy)
+        return self.db.zadd(REDIS_KEY, {proxy: MAX_SCORE})
     
     def count(self):
         """
